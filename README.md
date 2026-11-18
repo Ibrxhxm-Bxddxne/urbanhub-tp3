@@ -58,8 +58,8 @@ l'air, Alertes, Trafic) et leurs 67 tests.
 
 | | |
 |---|---|
-| **Lien du dépôt** | `<URL du dépôt du groupe>` |
-| **Empreinte du commit** | `<empreinte>` (TP3 : livrables) |
+| **Lien du dépôt** | https://github.com/Ibrxhxm-Bxddxne/urbanhub-tp3 |
+| **Empreinte du commit** | `7bf1980` (TP3 : livrables, schémas, comparatif, vue d'ensemble, manifeste, conclusion) |
 | **Chemin du livrable** | ce README ; les documents dans [`docs/`](docs/) ; le manifeste dans [`k8s/trafic.yaml`](k8s/trafic.yaml) |
 
 Le dépôt est ouvert à **Mekouar-Ayoub** en collaborateur.
