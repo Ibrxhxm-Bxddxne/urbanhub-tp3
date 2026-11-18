@@ -1,0 +1,76 @@
+# TP 3, etape 5 : le service Trafic decrit pour Kubernetes.
+# Appliquer : kubectl apply -f k8s/trafic.yaml
+# Strategie : Recreate, 1 copie, tant que les releves et les etats sont dans SQLite
+# (un fichier, un seul ecrivain). Voir docs/tp3/etape5-deploiement-et-manifeste.md.
+---
+apiVersion: v1
+kind: ConfigMap                        # la configuration hors du code (etape 4, 3.1)
+metadata: { name: trafic-config, labels: { app: trafic } }
+data:
+  REGLE: avec-minimum                  # Strategie choisie a l'assemblage (TP 2, etape 5)
+  URL_SIGNALEMENTS: http://alertes:8002/alertes
+  troncons.json: |
+    [
+      { "identifiant": "boulevard-voltaire-3", "vitesseLimite": 50 },
+      { "identifiant": "rue-de-rivoli-1", "vitesseLimite": 30 },
+      { "identifiant": "peripherique-porte-maillot", "vitesseLimite": 70 }
+    ]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim            # releves.db survit au remplacement du Pod
+metadata: { name: trafic-donnees, labels: { app: trafic } }
+spec:
+  accessModes: [ReadWriteOnce]         # un seul noeud peut l'ecrire : coherent avec SQLite
+  resources: { requests: { storage: 1Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: trafic, labels: { app: trafic } }
+spec:
+  replicas: 1                          # PAS 2 : chaque copie aurait sa fenetre et ses etats (etape 3, 3)
+  selector: { matchLabels: { app: trafic } }
+  strategy: { type: Recreate }         # l'ancienne copie s'arrete AVANT que la nouvelle ouvre la base
+  template:
+    metadata: { labels: { app: trafic } }
+    spec:
+      terminationGracePeriodSeconds: 5 # principal.ts ne gere pas SIGTERM : on ne l'attend pas 30 s
+      securityContext: { fsGroup: 1000 }   # l'utilisateur node (uid 1000) peut ecrire le volume
+      containers:
+        - name: trafic
+          image: urbanhub/trafic:1.0.0  # en pratique : l'empreinte du commit livre
+          ports: [{ containerPort: 8003 }]
+          env:
+            - { name: PORT, value: "8003" }
+            - { name: BASE_RELEVES, value: /donnees/releves.db }
+            - { name: TRONCONS, value: /config/troncons.json }
+            - name: REGLE
+              valueFrom: { configMapKeyRef: { name: trafic-config, key: REGLE } }
+            - name: URL_SIGNALEMENTS
+              valueFrom: { configMapKeyRef: { name: trafic-config, key: URL_SIGNALEMENTS } }
+          volumeMounts:
+            - { name: donnees, mountPath: /donnees }
+            - { name: config, mountPath: /config, readOnly: true }
+          readinessProbe:              # le Service n'envoie rien tant que le port n'ecoute pas
+            tcpSocket: { port: 8003 }
+            periodSeconds: 5
+          livenessProbe:               # un processus fige est relance (a remplacer par GET /sante)
+            tcpSocket: { port: 8003 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: donnees
+          persistentVolumeClaim: { claimName: trafic-donnees }
+        - name: config
+          configMap:
+            name: trafic-config
+            items: [{ key: troncons.json, path: troncons.json }]
+---
+apiVersion: v1
+kind: Service                          # l'adresse stable : http://trafic:8003
+metadata: { name: trafic, labels: { app: trafic } }
+spec:
+  selector: { app: trafic }
+  ports: [{ port: 8003, targetPort: 8003 }]

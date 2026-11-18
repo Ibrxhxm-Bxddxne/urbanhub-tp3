@@ -1,0 +1,12 @@
+# Une image par microservice : ici, Trafic (TP 3, etape 5).
+# Construire depuis la racine du depot : docker build -f Dockerfile.trafic -t urbanhub/trafic:<empreinte> .
+FROM node:24-slim
+WORKDIR /app
+COPY package.json ./
+COPY urbanhub-trafic ./urbanhub-trafic
+# La configuration vient de l'environnement, jamais du code.
+ENV PORT=8003 BASE_RELEVES=/donnees/releves.db REGLE=avec-minimum
+VOLUME /donnees
+EXPOSE 8003
+USER node
+CMD ["node", "urbanhub-trafic/src/principal.ts"]
